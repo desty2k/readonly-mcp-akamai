@@ -7,6 +7,8 @@
 
 Read-only MCP server for Akamai CDN. Search properties, browse EdgeWorker code, query DNS zones, inspect network lists, and translate error codes.
 
+<!-- mcp-name: io.github.desty2k/akamai -->
+
 > **Read-only by design.** This server can only read data. It cannot create, modify, delete, activate, deactivate, or purge anything. See [blog.wentland.io](https://blog.wentland.io) for the rationale.
 
 ## Tools
