@@ -1,0 +1,51 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.desty2k/akamai",
+  "title": "Akamai CDN",
+  "description": "Read-only MCP server for Akamai CDN — search properties, browse EdgeWorker code, query DNS, inspect network lists",
+  "repository": {
+    "url": "https://github.com/desty2k/readonly-mcp-akamai",
+    "source": "github"
+  },
+  "version": "0.1.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "readonly-mcp-akamai",
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AKAMAI_HOST",
+          "description": "Akamai EdgeGrid API hostname (e.g., akab-xxxx.luna.akamaiapis.net)",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "AKAMAI_CLIENT_TOKEN",
+          "description": "Akamai EdgeGrid client token",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "AKAMAI_CLIENT_SECRET",
+          "description": "Akamai EdgeGrid client secret",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "AKAMAI_ACCESS_TOKEN",
+          "description": "Akamai EdgeGrid access token",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
