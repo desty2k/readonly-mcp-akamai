@@ -14,10 +14,10 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from mcp_akamai.client import AkamaiClient
-from mcp_akamai.cache import BundleCache
-from mcp_akamai.index import PropertyIndex
-from mcp_akamai.settings import AkamaiSettings
+from mcp_akamai.cache import BundleCache  # noqa: E402
+from mcp_akamai.client import AkamaiClient  # noqa: E402
+from mcp_akamai.index import PropertyIndex  # noqa: E402
+from mcp_akamai.settings import AkamaiSettings  # noqa: E402
 
 PASS = "\033[92mPASS\033[0m"
 FAIL = "\033[91mFAIL\033[0m"
@@ -78,7 +78,7 @@ async def run() -> int:
             print(f"{PASS}")
 
             # --- Property activations ---
-            print(f"get_property_activations ... ", end="", flush=True)
+            print("get_property_activations ... ", end="", flush=True)
             act_data = await client.get(
                 f"/papi/v1/properties/{entry.property_id}/activations",
                 params={"contractId": entry.contract_id, "groupId": entry.group_id},
@@ -99,7 +99,7 @@ async def run() -> int:
 
         # --- CP codes ---
         if contract_id:
-            print(f"list_cp_codes ... ", end="", flush=True)
+            print("list_cp_codes ... ", end="", flush=True)
             cp_data = await client.get(
                 "/papi/v1/cpcodes",
                 params={"contractId": contract_id, "groupId": group_id},
@@ -183,7 +183,7 @@ async def run() -> int:
                         assert len(content) > 0, "empty file content"
                         print(f"{PASS}")
 
-                        print(f"bundle_cache.search_code ('function') ... ", end="", flush=True)
+                        print("bundle_cache.search_code ('function') ... ", end="", flush=True)
                         matches = cache.search_code(bundle, "function")
                         print(f"{PASS} ({len(matches)} matches)")
         except Exception as e:
