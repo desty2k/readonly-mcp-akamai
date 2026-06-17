@@ -19,3 +19,4 @@ htmlcov/
 .mypy_cache/
 *.so
 .DS_Store
+/.idea/
