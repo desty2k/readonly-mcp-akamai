@@ -117,9 +117,9 @@ def create_server(settings: AkamaiSettings | None = None) -> FastMCP:
     )
 
     # Register all tool modules
-    from mcp_akamai.tools import dns, edgeworkers, network_lists, properties, utility
+    from mcp_akamai.tools import dns, edgeworkers, network_lists, properties, security, utility
 
-    for module in [properties, dns, edgeworkers, network_lists, utility]:
+    for module in [properties, dns, edgeworkers, network_lists, security, utility]:
         module.register(mcp)
 
     return mcp
