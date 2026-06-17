@@ -57,12 +57,14 @@ Read-only MCP server for Akamai CDN. Search properties, browse EdgeWorker code, 
 ## Install
 
 ```bash
-# With uv (recommended)
-uv pip install readonly-mcp-akamai
+# With uv tool (recommended) — installs the binary into ~/.local/bin
+uv tool install readonly-mcp-akamai
 
 # With pip
 pip install readonly-mcp-akamai
 ```
+
+> **Tip:** `uv tool install` creates an isolated environment and places the `readonly-mcp-akamai` executable in `~/.local/bin` (added to `PATH` automatically by uv). This keeps your global Python clean.
 
 ## Docker
 
