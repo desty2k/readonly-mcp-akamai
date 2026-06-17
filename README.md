@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/readonly-mcp-akamai)](https://pypi.org/project/readonly-mcp-akamai/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Read-only MCP server for Akamai CDN. Search properties, browse EdgeWorker code, query DNS zones, inspect network lists, and translate error codes.
+Read-only MCP server for Akamai CDN. Search properties, browse EdgeWorker code, query DNS zones, inspect network lists, inspect WAF security configurations, and translate error codes.
 
 <!-- mcp-name: io.github.desty2k/akamai -->
 
@@ -38,6 +38,15 @@ Read-only MCP server for Akamai CDN. Search properties, browse EdgeWorker code, 
 | `get_edgeworker_files` | Download a version's code bundle and list all files. Cached in memory. |
 | `get_edgeworker_file` | Read a specific file from a cached bundle with line-range support. |
 | `search_edgeworker_code` | Regex search across all files in a cached bundle. |
+
+### Security (WAF)
+
+| Tool | Description |
+|------|-------------|
+| `list_security_configs` | List all Application Security (WAF) configurations with version and activation info. |
+| `get_security_policy_list` | List security policies within a configuration version. |
+| `get_ip_geo_firewall` | Get IP/GEO firewall settings for a security policy — shows allow/block network lists. |
+| `get_security_config_hostnames` | List hostnames protected by a security configuration version. |
 
 ### Network Lists
 
@@ -132,6 +141,9 @@ An agent with this server can answer:
 - "What IPs are in the blocklist network list?"
 - "Translate this Akamai error: 9.6f64d440.1318965461.2f2b078"
 - "List all CP codes for the main contract"
+- "What WAF configurations exist and which version is in production?"
+- "Which hostnames are protected by this security config?"
+- "What IPs are blocked by the WAF policy?"
 
 ## Development
 
