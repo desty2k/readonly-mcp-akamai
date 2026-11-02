@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 
 from mcp_akamai.logging_config import configure_logging
 from mcp_akamai.settings import AkamaiSettings
 
 logger = logging.getLogger(__name__)
+
+
+def is_loopback(host: str) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def main() -> None:
@@ -24,11 +34,19 @@ def main() -> None:
     mcp = create_server(settings)
 
     logger.info("starting transport=%s", settings.transport)
+    if settings.transport != "stdio" and not is_loopback(settings.http_host):
+        logger.warning(
+            "http_unauthenticated host=%s port=%d: the %s transport has no authentication; anyone who can reach "
+            "this address can read the Akamai account with the configured credentials",
+            settings.http_host,
+            settings.http_port,
+            settings.transport,
+        )
 
     if settings.transport == "http":
         mcp.run(
             transport="streamable-http",
-            host="0.0.0.0",
+            host=settings.http_host,
             port=settings.http_port,
             stateless_http=True,
             show_banner=False,
@@ -37,7 +55,7 @@ def main() -> None:
     elif settings.transport == "sse":
         mcp.run(
             transport="sse",
-            host="0.0.0.0",
+            host=settings.http_host,
             port=settings.http_port,
             show_banner=False,
             uvicorn_config={"log_config": uvicorn_log_config},

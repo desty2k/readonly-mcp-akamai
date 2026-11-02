@@ -103,9 +103,11 @@ class TestSearchDnsRecords:
         from mcp_akamai.tools import dns
 
         tools = extract_tools(dns)
-        results = await tools["search_dns_records"](mock_ctx, zone="example.com")
+        response = await tools["search_dns_records"](mock_ctx, zone="example.com")
 
-        assert len(results) == 2
+        assert response["count"] == 2
+        assert "truncated" not in response
+        results = response["records"]
         assert results[0]["name"] == "www.example.com"
         assert results[0]["type"] == "CNAME"
         assert results[0]["rdata"] == ["www.example.com.edgesuite.net."]
@@ -135,3 +137,15 @@ class TestSearchDnsRecords:
         args, kwargs = client.get.call_args
         params = kwargs.get("params", {})
         assert params.get("search") == "www"
+
+    async def test_large_zone_is_truncated(self, mock_ctx: MagicMock) -> None:
+        from mcp_akamai.tools import dns
+
+        client = mock_ctx.lifespan_context.client
+        records = [{"name": f"h{i}.example.com", "type": "A"} for i in range(dns.MAX_DNS_RECORDS + 1)]
+        client.get = AsyncMock(return_value={"recordsets": records})
+        tools = extract_tools(dns)
+        response = await tools["search_dns_records"](mock_ctx, zone="example.com")
+        assert response["count"] == dns.MAX_DNS_RECORDS
+        assert response["truncated"] is True
+        assert response["totalRecords"] == dns.MAX_DNS_RECORDS + 1

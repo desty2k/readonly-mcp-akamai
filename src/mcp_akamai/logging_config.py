@@ -1,8 +1,8 @@
 """
-Centralized logging configuration for ECS/CloudWatch-compatible output.
+Centralized logging configuration for container-friendly output.
 
 Provides two modes:
-- JSON (production): Single-line JSON per log record, parseable by ECS/CloudWatch/Datadog.
+- JSON (production): Single-line JSON per log record, parseable by common log collectors.
 - Text (local dev): Human-readable single-line format.
 
 All log sources (app, FastMCP, uvicorn, httpx, MCP SDK) are unified

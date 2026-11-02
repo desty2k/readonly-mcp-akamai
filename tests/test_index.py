@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from mcp_akamai.index import PropertyEntry, PropertyIndex
@@ -132,8 +133,8 @@ class TestPropertyIndexLoad:
         await idx.load(mock_client)
         assert idx.size == 1
 
-    async def test_load_handles_api_errors(self, mock_client: AsyncMock) -> None:
-        """Failed property list calls should not crash the index load."""
+    async def test_load_reports_when_every_list_fails(self, mock_client: AsyncMock) -> None:
+        """If every property list call fails, the load fails and records why."""
         mock_client.get = AsyncMock(
             side_effect=[
                 make_groups_response(
@@ -146,6 +147,79 @@ class TestPropertyIndexLoad:
         )
 
         idx = PropertyIndex()
+        assert await idx.load(mock_client) is False
+        assert not idx.loaded
+        assert idx.last_error == "Exception: API timeout"
+
+
+def _http_error(status: int) -> httpx.HTTPStatusError:
+    request = httpx.Request("GET", "https://test.akamaiapis.net/papi/v1/groups")
+    return httpx.HTTPStatusError("err", request=request, response=httpx.Response(status, request=request))
+
+
+class TestPropertyIndexErrors:
+    async def test_bad_credentials_are_reported(self, mock_client: AsyncMock) -> None:
+        mock_client.get = AsyncMock(side_effect=_http_error(401))
+        idx = PropertyIndex()
+        assert await idx.load(mock_client) is False
+        assert not idx.loaded
+        assert "HTTP 401" in idx.last_error
+
+    async def test_problem_detail_is_included(self, mock_client: AsyncMock) -> None:
+        request = httpx.Request("GET", "https://test.akamaiapis.net/papi/v1/groups")
+        response = httpx.Response(400, request=request, json={"detail": "The host header is not valid"})
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPStatusError("err", request=request, response=response))
+        idx = PropertyIndex()
         await idx.load(mock_client)
+        assert idx.last_error == "Akamai returned HTTP 400 while listing properties: The host header is not valid"
+
+    async def test_network_error_is_reported(self, mock_client: AsyncMock) -> None:
+        request = httpx.Request("GET", "https://test.akamaiapis.net/papi/v1/groups")
+        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused", request=request))
+        idx = PropertyIndex()
+        await idx.load(mock_client)
+        assert "Cannot reach the Akamai API" in idx.last_error
+
+    async def test_failed_refresh_keeps_previous_contents(self, mock_client: AsyncMock) -> None:
+        mock_client.get = AsyncMock(side_effect=[make_groups_response(), make_properties_response()])
+        idx = PropertyIndex()
+        assert await idx.load(mock_client)
+        mock_client.get = AsyncMock(side_effect=_http_error(500))
+        assert await idx.load(mock_client) is False
         assert idx.loaded
-        assert idx.size == 0
+        assert idx.size == 1
+        assert "HTTP 500" in idx.last_error
+
+    async def test_partial_load_is_reported(self, mock_client: AsyncMock) -> None:
+        mock_client.get = AsyncMock(
+            side_effect=[
+                make_groups_response([{"groupId": "grp_1", "groupName": "G1", "contractIds": ["ctr_1", "ctr_2"]}]),
+                make_properties_response(),
+                _http_error(403),
+            ]
+        )
+        idx = PropertyIndex()
+        assert await idx.load(mock_client)
+        assert idx.size == 1
+        assert idx.last_error.startswith("1 of 2 contract/group property lists failed")
+
+    async def test_clean_load_clears_the_error(self, mock_client: AsyncMock) -> None:
+        idx = PropertyIndex()
+        idx.last_error = "earlier failure"
+        mock_client.get = AsyncMock(side_effect=[make_groups_response(), make_properties_response()])
+        await idx.load(mock_client)
+        assert idx.last_error is None
+
+    def test_retry_uses_backoff_capped_by_interval(self) -> None:
+        idx = PropertyIndex()
+        assert idx._next_delay(300) == 300
+        idx._failures = 1
+        assert idx._next_delay(300) == 5
+        idx._failures = 10
+        assert idx._next_delay(300) == 120
+        assert idx._next_delay(60) == 60
+
+    def test_close_scores_are_ambiguous(self) -> None:
+        assert PropertyIndex.is_ambiguous([{"matchScore": 90.0}, {"matchScore": 88.0}])
+        assert not PropertyIndex.is_ambiguous([{"matchScore": 95.0}, {"matchScore": 60.0}])
+        assert not PropertyIndex.is_ambiguous([{"matchScore": 95.0}])

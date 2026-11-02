@@ -19,6 +19,9 @@ class AkamaiSettings(BaseSettings):
     access_token: str
 
     transport: Literal["stdio", "http", "sse"] = "stdio"
+    # The HTTP/SSE transports have no authentication: anyone who can reach the
+    # port can read the Akamai account with these credentials. Loopback by default.
+    http_host: str = "127.0.0.1"
     http_port: int = 8080
 
     log_format: Literal["json", "text"] = "json"

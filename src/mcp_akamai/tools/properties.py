@@ -7,6 +7,8 @@ from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 
+from mcp_akamai import validation as v
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,19 +18,49 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         query: Annotated[str, "Property name or partial name to search for"],
         limit: Annotated[int, "Maximum number of results to return (1-50)"] = 10,
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, Any]:
         """Search CDN properties by name. Returns matching properties with
-        version numbers, staging/production versions, and group/contract IDs.
+        version numbers, staging/production versions, group/contract IDs, and a
+        match score. When the top matches score about the same, the response
+        sets "ambiguous": confirm which property the user means.
 
         Example questions:
         - "Find the CDN config for example.com"
         - "Which property handles api.example.com?"
         """
         app = ctx.lifespan_context
+        index = app.property_index
         limit = max(1, min(50, limit))
-        results = app.property_index.search(query, limit=limit)
-        logger.info("search_properties query=%s results=%d", query, len(results))
-        return results
+
+        if not index.loaded:
+            if index.last_error:
+                return {
+                    "error": "Property index failed to load",
+                    "reason": index.last_error,
+                    "hint": "The server retries in the background. Tools that take a property ID still work.",
+                }
+            return {
+                "error": "Property index not loaded yet",
+                "reason": "The index is still loading. Try again in a few seconds.",
+            }
+
+        query_clean = query.strip()
+        results = index.search(query_clean, limit=limit)
+        response: dict[str, Any] = {
+            "query": query_clean,
+            "results": results,
+            "count": len(results),
+            "indexedProperties": index.size,
+        }
+        if index.is_ambiguous(results):
+            response["ambiguous"] = True
+            response["note"] = "Top matches score about the same; confirm which property the user means."
+        if index.last_error:
+            # Loaded, but the latest load failed or was incomplete: results may be stale or partial.
+            response["warning"] = f"Results may be stale or incomplete: {index.last_error}"
+        logger.info("search_properties results=%d", len(results))
+        logger.debug("search_properties query=%s", query_clean)
+        return response
 
     @mcp.tool()
     async def get_property_details(
@@ -44,6 +76,7 @@ def register(mcp: FastMCP) -> None:
         - "What version is deployed to production for this property?"
         - "What hostnames does this property serve?"
         """
+        property_id, contract_id, group_id = _check_ids(property_id, contract_id, group_id)
         app = ctx.lifespan_context
         client = app.client
         # Get property metadata
@@ -101,6 +134,8 @@ def register(mcp: FastMCP) -> None:
         - "What caching rules are set for this property?"
         - "Show me the origin configuration"
         """
+        property_id, contract_id, group_id = _check_ids(property_id, contract_id, group_id)
+        v.positive_int(version, "version")
         app = ctx.lifespan_context
         client = app.client
 
@@ -133,6 +168,7 @@ def register(mcp: FastMCP) -> None:
         - "When was the last production deployment for this property?"
         - "Who activated version 12?"
         """
+        property_id, contract_id, group_id = _check_ids(property_id, contract_id, group_id)
         app = ctx.lifespan_context
         client = app.client
 
@@ -159,6 +195,10 @@ def register(mcp: FastMCP) -> None:
 
         logger.info("get_property_activations property_id=%s count=%d", property_id, len(activations))
         return activations
+
+
+def _check_ids(property_id: str, contract_id: str, group_id: str) -> tuple[str, str, str]:
+    return v.property_id(property_id), v.contract_id(contract_id), v.group_id(group_id)
 
 
 def _slim_rules(rules: dict[str, Any]) -> dict[str, Any]:

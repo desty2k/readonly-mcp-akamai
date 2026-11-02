@@ -100,7 +100,8 @@ def register(mcp: FastMCP) -> None:
             body={"errorCode": error_code},
         )
 
-        logger.info("translate_error_code error_code=%s", error_code)
+        logger.info("translate_error_code")
+        logger.debug("translate_error_code error_code=%s", error_code)
 
         translated = data.get("translatedError", {})
         return {

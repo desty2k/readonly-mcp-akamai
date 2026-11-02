@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from mcp_akamai import cache as cache_mod
 from mcp_akamai.cache import BundleCache, CachedBundle, CachedFile
 
 
@@ -178,7 +179,7 @@ class TestBundleCacheSearch:
 
 class TestBundleCacheEviction:
     def test_expired_entries_evicted(self) -> None:
-        cache = BundleCache(maxsize=50, ttl=1)  # 1 second TTL
+        cache = BundleCache(ttl=1)  # 1 second TTL
         bundle = CachedBundle(
             edgeworker_id=1,
             version="1.0",
@@ -193,3 +194,61 @@ class TestBundleCacheEviction:
         time.sleep(1.1)
         result = cache.get(1, "1.0")
         assert result is None
+
+
+class TestCaps:
+    def test_read_file_stops_at_char_cap(self) -> None:
+        line = "x" * 1000
+        bundle = CachedBundle(1, "1.0", {"big.js": CachedFile("big.js", "", [line] * 500)})
+        out = BundleCache().read_file(bundle, "big.js")
+        assert len(out) < cache_mod.MAX_READ_CHARS + 200
+        last = out.splitlines()[-1]
+        assert last.startswith("[output truncated")
+        next_line = int(last.split("start_line=")[1].rstrip("]"))
+        assert f"{next_line - 1:>4} | " in out
+        assert f"{next_line:>4} | " not in out
+
+    def test_read_file_shortens_long_lines(self) -> None:
+        bundle = CachedBundle(1, "1.0", {"min.js": CachedFile("min.js", "", ["y" * 50_000])})
+        out = BundleCache().read_file(bundle, "min.js")
+        assert len(out) < cache_mod.MAX_LINE_CHARS + 100
+        assert "line shortened, 50000 characters" in out
+
+    def test_search_results_are_capped(self) -> None:
+        bundle = CachedBundle(1, "1.0", {"a.js": CachedFile("a.js", "", ["match " + "z" * 1000] * 1000)})
+        results = BundleCache().search_code(bundle, "match", max_results=10_000)
+        assert len(results) == cache_mod.MAX_SEARCH_RESULTS
+        assert len(results[0]["content"]) <= cache_mod.MAX_MATCH_LINE_CHARS + 4
+
+    async def test_oversized_download_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(cache_mod, "MAX_BUNDLE_BYTES", 100)
+        client = MagicMock()
+        client.get_bytes = AsyncMock(return_value=b"x" * 101)
+        with pytest.raises(cache_mod.BundleTooLargeError):
+            await BundleCache().load(client, 1, "1.0")
+
+    async def test_oversized_extraction_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        raw = _make_tgz({"a.js": "a" * 5000, "b.js": "b" * 5000})
+        monkeypatch.setattr(cache_mod, "MAX_BUNDLE_BYTES", 8000)
+        client = MagicMock()
+        client.get_bytes = AsyncMock(return_value=raw)
+        with pytest.raises(cache_mod.BundleTooLargeError):
+            await BundleCache().load(client, 1, "1.0")
+
+    async def test_cache_is_capped_by_bytes(self) -> None:
+        cache = BundleCache(max_bytes=25_000)
+        client = MagicMock()
+        for i in range(3):
+            client.get_bytes = AsyncMock(return_value=_make_tgz({"a.js": str(i) * 5000}))
+            await cache.load(client, i + 1, "1.0")
+        # Each bundle counts about 10 kB; only two fit.
+        assert cache.get(1, "1.0") is None
+        assert cache.get(3, "1.0") is not None
+
+    async def test_bundle_larger_than_cache_is_served_uncached(self) -> None:
+        cache = BundleCache(max_bytes=1000)
+        client = MagicMock()
+        client.get_bytes = AsyncMock(return_value=_make_tgz({"a.js": "a" * 5000}))
+        bundle = await cache.load(client, 1, "1.0")
+        assert "a.js" in bundle.files
+        assert cache.get(1, "1.0") is None

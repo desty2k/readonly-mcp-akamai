@@ -7,6 +7,9 @@ from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 
+from mcp_akamai import validation as v
+from mcp_akamai.cache import MAX_SEARCH_RESULTS
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +56,7 @@ def register(mcp: FastMCP) -> None:
         - "What versions exist for EdgeWorker 42?"
         - "When was the latest version created?"
         """
+        v.positive_int(edgeworker_id, "edgeworker_id")
         app = ctx.lifespan_context
         client = app.client
 
@@ -60,14 +64,14 @@ def register(mcp: FastMCP) -> None:
         items = data.get("versions", [])
 
         results = []
-        for v in items:
+        for ver in items:
             results.append(
                 {
-                    "edgeWorkerId": v.get("edgeWorkerId"),
-                    "version": v.get("version"),
-                    "createdBy": v.get("createdBy"),
-                    "createdTime": v.get("createdTime"),
-                    "checksum": v.get("checksum", ""),
+                    "edgeWorkerId": ver.get("edgeWorkerId"),
+                    "version": ver.get("version"),
+                    "createdBy": ver.get("createdBy"),
+                    "createdTime": ver.get("createdTime"),
+                    "checksum": ver.get("checksum", ""),
                 }
             )
 
@@ -87,6 +91,8 @@ def register(mcp: FastMCP) -> None:
         - "What files are in EdgeWorker 42 version 1.0?"
         - "Show me the file listing for this EdgeWorker"
         """
+        v.positive_int(edgeworker_id, "edgeworker_id")
+        v.edgeworker_version(version)
         app = ctx.lifespan_context
         bundle = await app.bundle_cache.load(app.client, edgeworker_id, version)
         files = app.bundle_cache.list_files(bundle)
@@ -103,12 +109,15 @@ def register(mcp: FastMCP) -> None:
         end_line: Annotated[int | None, "Last line to read (1-based, inclusive). Omit to read to end."] = None,
     ) -> str:
         """Read a file from an EdgeWorker code bundle. Returns numbered
-        source lines.
+        source lines. Long output is cut off with a note giving the start_line
+        to continue from; very long lines (minified code) are shortened.
 
         Example questions:
         - "Show me main.js from EdgeWorker 42 v1.0"
         - "Read lines 50-100 of the request handler"
         """
+        v.positive_int(edgeworker_id, "edgeworker_id")
+        v.edgeworker_version(version)
         app = ctx.lifespan_context
         bundle = await app.bundle_cache.load(app.client, edgeworker_id, version)
         content = app.bundle_cache.read_file(bundle, path, start_line, end_line)
@@ -121,7 +130,7 @@ def register(mcp: FastMCP) -> None:
         edgeworker_id: Annotated[int, "EdgeWorker ID (numeric)"],
         version: Annotated[str, "Version identifier (e.g., '1.0')"],
         pattern: Annotated[str, "Regex pattern to search for (case-insensitive)"],
-        max_results: Annotated[int, "Maximum number of matches to return"] = 50,
+        max_results: Annotated[int, "Maximum number of matches to return (1-200)"] = 50,
     ) -> list[dict[str, Any]]:
         """Search across all files in an EdgeWorker code bundle using a regex
         pattern. Returns matching file paths, line numbers, and content.
@@ -130,14 +139,14 @@ def register(mcp: FastMCP) -> None:
         - "Find all uses of 'setResponseHeader' in this EdgeWorker"
         - "Search for error handling patterns"
         """
+        v.positive_int(edgeworker_id, "edgeworker_id")
+        v.edgeworker_version(version)
         app = ctx.lifespan_context
         bundle = await app.bundle_cache.load(app.client, edgeworker_id, version)
+        max_results = max(1, min(MAX_SEARCH_RESULTS, max_results))
         results = app.bundle_cache.search_code(bundle, pattern, max_results)
         logger.info(
-            "search_edgeworker_code edgeworker_id=%d version=%s pattern=%s matches=%d",
-            edgeworker_id,
-            version,
-            pattern,
-            len(results),
+            "search_edgeworker_code edgeworker_id=%d version=%s matches=%d", edgeworker_id, version, len(results)
         )
+        logger.debug("search_edgeworker_code pattern=%s", pattern)
         return results

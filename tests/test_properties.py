@@ -32,24 +32,58 @@ class TestSearchProperties:
         from mcp_akamai.tools import properties
 
         tools = extract_tools(properties)
-        results = await tools["search_properties"](ctx_with_index, query="www", limit=10)
-        assert len(results) >= 1
-        assert results[0]["propertyName"] == "www.example.com"
+        response = await tools["search_properties"](ctx_with_index, query="www", limit=10)
+        assert response["count"] >= 1
+        assert response["results"][0]["propertyName"] == "www.example.com"
+        assert response["indexedProperties"] == 2
 
     async def test_search_empty_query(self, ctx_with_index: MagicMock) -> None:
         from mcp_akamai.tools import properties
 
         tools = extract_tools(properties)
-        results = await tools["search_properties"](ctx_with_index, query="", limit=10)
-        assert isinstance(results, list)
+        response = await tools["search_properties"](ctx_with_index, query="", limit=10)
+        assert isinstance(response["results"], list)
 
     async def test_search_limit_clamped(self, ctx_with_index: MagicMock) -> None:
         from mcp_akamai.tools import properties
 
         tools = extract_tools(properties)
-        results = await tools["search_properties"](ctx_with_index, query="example", limit=100)
+        response = await tools["search_properties"](ctx_with_index, query="example", limit=100)
         # Limit is clamped to 50
-        assert isinstance(results, list)
+        assert response["count"] <= 50
+
+    async def test_search_reports_load_failure(self, mock_ctx: MagicMock) -> None:
+        from mcp_akamai.tools import properties
+
+        mock_ctx.lifespan_context.property_index.last_error = "Akamai rejected the API credentials (HTTP 401)."
+        tools = extract_tools(properties)
+        response = await tools["search_properties"](mock_ctx, query="www")
+        assert response["error"] == "Property index failed to load"
+        assert "HTTP 401" in response["reason"]
+
+    async def test_search_before_first_load(self, mock_ctx: MagicMock) -> None:
+        from mcp_akamai.tools import properties
+
+        tools = extract_tools(properties)
+        response = await tools["search_properties"](mock_ctx, query="www")
+        assert response["error"] == "Property index not loaded yet"
+
+    async def test_search_warns_when_results_may_be_stale(self, ctx_with_index: MagicMock) -> None:
+        from mcp_akamai.tools import properties
+
+        ctx_with_index.lifespan_context.property_index.last_error = "HTTP 500"
+        tools = extract_tools(properties)
+        response = await tools["search_properties"](ctx_with_index, query="www")
+        assert response["count"] >= 1
+        assert "HTTP 500" in response["warning"]
+
+    async def test_search_flags_close_matches(self, ctx_with_index: MagicMock) -> None:
+        from mcp_akamai.tools import properties
+
+        tools = extract_tools(properties)
+        response = await tools["search_properties"](ctx_with_index, query="example.com")
+        assert response["ambiguous"] is True
+        assert "note" in response
 
 
 class TestGetPropertyDetails:

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from fastmcp import FastMCP
 
+from mcp_akamai import __version__
 from mcp_akamai.cache import BundleCache
 from mcp_akamai.client import AkamaiClient
 from mcp_akamai.index import PropertyIndex
@@ -60,7 +61,9 @@ geographic identifiers. Used in property rules for access control and routing.
 ## Notes
 
 - Property search is fuzzy by name. The index is preloaded at startup and \
-refreshed periodically. Results include a match score.
+refreshed periodically. Results include a match score; when the top matches \
+score about the same, the response says so: confirm which one the user means. \
+If the index failed to load, search returns the reason instead of results.
 - Empty results mean no matches were found, not an error.
 - Property rules are deeply nested JSON. The top-level "default" rule contains \
 children, each with match criteria and behaviors.
@@ -112,6 +115,7 @@ def create_server(settings: AkamaiSettings | None = None) -> FastMCP:
 
     mcp = FastMCP(
         "Akamai CDN",
+        version=__version__,
         instructions=MCP_INSTRUCTIONS,
         lifespan=lifespan,
     )

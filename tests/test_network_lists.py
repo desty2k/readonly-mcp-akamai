@@ -105,3 +105,14 @@ class TestGetNetworkList:
         assert result["list"] == ["1.2.3.4", "10.0.0.0/8", "192.168.1.0/24"]
         assert result["elementCount"] == 3
         assert "links" not in result
+
+    async def test_large_list_is_truncated(self, mock_ctx: MagicMock) -> None:
+        from mcp_akamai.tools import network_lists
+
+        client = mock_ctx.lifespan_context.client
+        entries = [f"10.0.{i // 256}.{i % 256}" for i in range(network_lists.MAX_LIST_ELEMENTS + 10)]
+        client.get = AsyncMock(return_value={"uniqueId": "1_BIG", "elementCount": len(entries), "list": entries})
+        tools = extract_tools(network_lists)
+        result = await tools["get_network_list"](mock_ctx, unique_id="1_BIG")
+        assert len(result["list"]) == network_lists.MAX_LIST_ELEMENTS
+        assert result["truncated"] is True

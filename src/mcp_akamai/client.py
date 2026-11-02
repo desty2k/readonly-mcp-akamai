@@ -20,6 +20,16 @@ logger = logging.getLogger(__name__)
 
 MAX_BODY_SIZE = 131072
 
+# The only paths the client will POST to. Each one is a read that Akamai exposes
+# as POST: the error translator takes an error reference and returns what it
+# means without changing anything. Any other POST is refused before a request
+# is built, so the client cannot be used to change the account.
+ALLOWED_POST_PATHS = frozenset({"/edge-diagnostics/v1/error-translator"})
+
+
+class WriteNotAllowedError(RuntimeError):
+    """Raised when code asks the client to POST to a path outside the allow-list."""
+
 
 def _base64_hmac_sha256(data: str, key: str) -> str:
     return base64.b64encode(hmac.new(key.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).digest()).decode(
@@ -113,9 +123,16 @@ class AkamaiClient:
             access_token=self._access_token,
         )
 
+    def _url(self, path: str) -> str:
+        """Join an API path onto the configured host; refuse anything that leaves it."""
+        url = urljoin(self._base_url + "/", path.lstrip("/"))
+        if urlparse(url).netloc != urlparse(self._base_url).netloc:
+            raise ValueError(f"Path resolves outside the Akamai API host: {path!r}")
+        return url
+
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """Send a GET request and return the parsed JSON response."""
-        url = urljoin(self._base_url + "/", path.lstrip("/"))
+        url = self._url(path)
         if params:
             # Build URL with query string for signing
             request = self._http.build_request("GET", url, params=params)
@@ -136,7 +153,7 @@ class AkamaiClient:
 
     async def get_bytes(self, path: str, params: dict[str, Any] | None = None) -> bytes:
         """Send a GET request and return the raw response body."""
-        url = urljoin(self._base_url + "/", path.lstrip("/"))
+        url = self._url(path)
         if params:
             request = self._http.build_request("GET", url, params=params)
             url_with_qs = str(request.url)
@@ -151,8 +168,15 @@ class AkamaiClient:
         return response.content
 
     async def post_json(self, path: str, body: dict[str, Any]) -> Any:
-        """Send a POST request with JSON body and return the parsed response."""
-        url = urljoin(self._base_url + "/", path.lstrip("/"))
+        """POST a JSON body to an allow-listed read endpoint and return the parsed response.
+
+        Raises WriteNotAllowedError, without sending anything, for any path not in
+        ALLOWED_POST_PATHS.
+        """
+        normalized = "/" + path.lstrip("/")
+        if normalized not in ALLOWED_POST_PATHS:
+            raise WriteNotAllowedError(f"POST to {path!r} is not allowed: this server only reads")
+        url = self._url(normalized)
         raw_body = orjson.dumps(body)
 
         auth_header = self._sign("POST", url, raw_body)
