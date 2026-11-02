@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 (2026-11-03)
+
+### Added
+
+- Every tool is annotated `readOnlyHint`, `destructiveHint: false`,
+  `idempotentHint` and `openWorldHint`, so clients that auto-approve read-only
+  tools can do so. A test checks that every tool carries the annotations.
+- The README, the PyPI page and the MCP Registry entry link to the blog post
+  about this server.
+
 ## 0.2.0 (2026-11-02)
 
 ### Changed

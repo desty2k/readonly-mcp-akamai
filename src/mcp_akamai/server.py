@@ -6,8 +6,10 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Any
 
 from fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from mcp_akamai import __version__
 from mcp_akamai.cache import BundleCache
@@ -82,6 +84,27 @@ class AppContext:
     bundle_cache: BundleCache
 
 
+# Every tool only reads. Clients use these hints to auto-approve read-only
+# tools; openWorldHint because results come from an external system.
+READ_ONLY_ANNOTATIONS = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+
+
+class _ReadOnlyRegistrar:
+    """Passes tool registrations through to FastMCP with read-only annotations."""
+
+    def __init__(self, mcp: FastMCP) -> None:
+        self._mcp = mcp
+
+    def tool(self, *args: Any, **kwargs: Any) -> Any:
+        kwargs.setdefault("annotations", READ_ONLY_ANNOTATIONS)
+        return self._mcp.tool(*args, **kwargs)
+
+
 def create_server(settings: AkamaiSettings | None = None) -> FastMCP:
     """Build and return the configured FastMCP server."""
     if settings is None:
@@ -124,6 +147,6 @@ def create_server(settings: AkamaiSettings | None = None) -> FastMCP:
     from mcp_akamai.tools import dns, edgeworkers, network_lists, properties, utility
 
     for module in [properties, dns, edgeworkers, network_lists, utility]:
-        module.register(mcp)
+        module.register(_ReadOnlyRegistrar(mcp))
 
     return mcp

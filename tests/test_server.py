@@ -32,6 +32,14 @@ async def test_server_registers_sixteen_tools() -> None:
     assert len(tools) == 16
 
 
+async def test_every_tool_is_annotated_read_only() -> None:
+    tools = await create_server(_settings()).list_tools()
+    for tool in tools:
+        assert tool.annotations is not None, tool.name
+        assert tool.annotations.readOnlyHint is True, tool.name
+        assert tool.annotations.destructiveHint is False, tool.name
+
+
 def test_http_host_defaults_to_loopback() -> None:
     assert _settings().http_host == "127.0.0.1"
 
