@@ -25,14 +25,15 @@ claude mcp add akamai \
 ```
 
 `uvx` downloads the package into a cached, isolated environment and runs it.
-Python 3.13 or newer.
+Python 3.11 or newer.
 
 <!-- mcp-name: io.github.desty2k/akamai -->
 
 > **Read-only by design.** Every call this server makes reads. It uses `GET`,
 > plus one `POST` to Akamai's error translator, which takes an error reference
-> and returns what it means without changing anything. It cannot create,
-> modify, delete, activate, deactivate, or purge anything. Give the API client
+> and returns what it means without changing anything. The client refuses a
+> `POST` to any other path before sending it, and a test checks that. It cannot
+> create, modify, delete, activate, deactivate, or purge anything. Give the API client
 > read-only access as a second line of defense: see [Credentials](#credentials).
 > Read [why I build read-only MCP servers](https://blog.wentland.io/blog/why-read-only-mcp/).
 
@@ -59,7 +60,7 @@ the four `AKAMAI_*` variables below.
 
 | Tool | Description |
 |------|-------------|
-| `search_properties` | Fuzzy search CDN properties by name. Uses a preloaded in-memory index refreshed every 5 minutes. |
+| `search_properties` | Fuzzy search CDN properties by name. Uses a preloaded in-memory index refreshed every 5 minutes. Returns match scores, flags close matches, and reports why the index failed to load if it did. |
 | `get_property_details` | Get property versions, hostnames, and activation status. |
 | `get_property_rules` | Get the rule tree for a property version — the full CDN configuration. |
 | `get_property_activations` | List deployment history for a property. |
@@ -69,7 +70,7 @@ the four `AKAMAI_*` variables below.
 | Tool | Description |
 |------|-------------|
 | `list_dns_zones` | List all DNS zones, optionally filtered by name or type. |
-| `search_dns_records` | Search DNS records within a zone by name or record type. |
+| `search_dns_records` | Search DNS records within a zone by name or record type. Returns at most 500 records. |
 
 ### EdgeWorkers (serverless functions)
 
@@ -77,16 +78,16 @@ the four `AKAMAI_*` variables below.
 |------|-------------|
 | `list_edgeworkers` | List all EdgeWorker IDs with names and descriptions. |
 | `list_edgeworker_versions` | List versions for an EdgeWorker. |
-| `get_edgeworker_files` | Download a version's code bundle and list all files. Cached in memory. |
-| `get_edgeworker_file` | Read a specific file from a cached bundle with line-range support. |
-| `search_edgeworker_code` | Regex search across all files in a cached bundle. |
+| `get_edgeworker_files` | Download a version's code bundle and list all files. Cached in memory (bundles up to 16 MB, 128 MB in total). |
+| `get_edgeworker_file` | Read a specific file from a cached bundle with line-range support. Output is capped at 100,000 characters, with the line to continue from. |
+| `search_edgeworker_code` | Regex search across all files in a cached bundle. Returns at most 200 matches. |
 
 ### Network Lists
 
 | Tool | Description |
 |------|-------------|
 | `search_network_lists` | Search network lists (IP allowlists, blocklists, geo lists) by name. |
-| `get_network_list` | Get the full contents of a network list. |
+| `get_network_list` | Get the contents of a network list, at most 5,000 entries. |
 
 ### Utility
 
@@ -128,14 +129,25 @@ All settings are environment variables with the `AKAMAI_` prefix.
 | `AKAMAI_CLIENT_SECRET` | Yes | — | EdgeGrid client secret |
 | `AKAMAI_ACCESS_TOKEN` | Yes | — | EdgeGrid access token |
 | `AKAMAI_TRANSPORT` | No | `stdio` | Transport: `stdio`, `http`, or `sse` |
+| `AKAMAI_HTTP_HOST` | No | `127.0.0.1` | Address the HTTP/SSE transport listens on |
 | `AKAMAI_HTTP_PORT` | No | `8080` | Port for HTTP/SSE transport |
 | `AKAMAI_LOG_FORMAT` | No | `json` | Log format: `json` or `text` |
 | `AKAMAI_LOG_LEVEL` | No | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `AKAMAI_INDEX_REFRESH_INTERVAL` | No | `300` | Property index refresh interval in seconds |
 
-The `http` and `sse` transports listen on all interfaces and have no
-authentication. Run them only where the port is not reachable from outside,
-for example published on loopback: `docker run -p 127.0.0.1:8080:8080 ...`.
+The `http` and `sse` transports have no authentication: anyone who can reach
+the port can read the Akamai account with the configured credentials. They
+listen on `127.0.0.1` by default. Setting `AKAMAI_HTTP_HOST` to any other
+address logs a warning at startup. The Docker image sets
+`AKAMAI_HTTP_HOST=0.0.0.0` so a published port works; publish it on loopback
+only:
+
+```bash
+docker run --rm -p 127.0.0.1:8080:8080 -e AKAMAI_TRANSPORT=http \
+  -e AKAMAI_HOST=... -e AKAMAI_CLIENT_TOKEN=... \
+  -e AKAMAI_CLIENT_SECRET=... -e AKAMAI_ACCESS_TOKEN=... \
+  ghcr.io/desty2k/readonly-mcp-akamai:latest
+```
 
 ## MCP client configuration
 

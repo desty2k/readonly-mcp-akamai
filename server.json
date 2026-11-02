@@ -7,12 +7,12 @@
     "url": "https://github.com/desty2k/readonly-mcp-akamai",
     "source": "github"
   },
-  "version": "0.1.2",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "readonly-mcp-akamai",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },
