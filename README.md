@@ -35,7 +35,8 @@ Python 3.11 or newer.
 > `POST` to any other path before sending it, and a test checks that. It cannot
 > create, modify, delete, activate, deactivate, or purge anything. Give the API client
 > read-only access as a second line of defense: see [Credentials](#credentials).
-> Read [why I build read-only MCP servers](https://blog.wentland.io/blog/why-read-only-mcp/).
+> Read [the post about this server](https://blog.wentland.io/blog/read-only-mcp-server-akamai/) and
+> [why I build read-only MCP servers](https://blog.wentland.io/blog/why-read-only-mcp/).
 
 ## Credentials
 

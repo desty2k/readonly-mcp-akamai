@@ -3,6 +3,7 @@
   "name": "io.github.desty2k/akamai",
   "title": "Akamai CDN",
   "description": "Read-only MCP server for Akamai CDN — properties, EdgeWorkers, DNS, network lists",
+  "websiteUrl": "https://blog.wentland.io/blog/read-only-mcp-server-akamai/",
   "repository": {
     "url": "https://github.com/desty2k/readonly-mcp-akamai",
     "source": "github"
