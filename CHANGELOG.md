@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2 (2026-11-02)
+
+No changes to the server's behavior.
+
+- Docker: `.dockerignore` excluded `README.md`, which the package build reads,
+  so the image never built and was never published to GHCR. Fixed.
+- README reworked: Quick start with `uvx`, a Credentials section (read-only API
+  client), `uvx` in the client configuration, `docker run -i` for stdio, a note
+  that the HTTP and SSE transports listen on all interfaces, and a comparison
+  note.
+- The read-only note now mentions the one `POST`, to the error translator.
+
 ## 0.1.0 (2026-04-07)
 
 Initial release.

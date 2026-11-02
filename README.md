@@ -1,15 +1,57 @@
 # readonly-mcp-akamai
 
-[![CI](https://github.com/desty2k/readonly-mcp-akamai/actions/workflows/ci.yml/badge.svg)](https://github.com/desty2k/readonly-mcp-akamai/actions)
+[![CI](https://github.com/desty2k/readonly-mcp-akamai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/desty2k/readonly-mcp-akamai/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/desty2k/readonly-mcp-akamai/graph/badge.svg)](https://codecov.io/gh/desty2k/readonly-mcp-akamai)
-[![PyPI](https://img.shields.io/pypi/v/readonly-mcp-akamai)](https://pypi.org/project/readonly-mcp-akamai/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI](https://img.shields.io/pypi/v/readonly-mcp-akamai.svg)](https://pypi.org/project/readonly-mcp-akamai/)
+[![Python](https://img.shields.io/pypi/pyversions/readonly-mcp-akamai.svg)](https://pypi.org/project/readonly-mcp-akamai/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Read-only MCP server for Akamai CDN. Search properties, browse EdgeWorker code, query DNS zones, inspect network lists, and translate error codes.
+A read-only Model Context Protocol (MCP) server that lets AI agents explore an
+Akamai account: CDN properties and their rule trees, EdgeWorker code, Edge DNS
+zones, network lists, CP codes, and error references. 16 tools, all of them
+reads.
+
+## Quick start
+
+With [uv](https://docs.astral.sh/uv/) installed, there is nothing else to install:
+
+```bash
+claude mcp add akamai \
+  -e AKAMAI_HOST=akab-xxxx.luna.akamaiapis.net \
+  -e AKAMAI_CLIENT_TOKEN=akab-xxxx \
+  -e AKAMAI_CLIENT_SECRET=xxxx \
+  -e AKAMAI_ACCESS_TOKEN=akab-xxxx \
+  -- uvx readonly-mcp-akamai
+```
+
+`uvx` downloads the package into a cached, isolated environment and runs it.
+Python 3.13 or newer.
 
 <!-- mcp-name: io.github.desty2k/akamai -->
 
-> **Read-only by design.** This server can only read data. It cannot create, modify, delete, activate, deactivate, or purge anything. See [blog.wentland.io](https://blog.wentland.io) for the rationale.
+> **Read-only by design.** Every call this server makes reads. It uses `GET`,
+> plus one `POST` to Akamai's error translator, which takes an error reference
+> and returns what it means without changing anything. It cannot create,
+> modify, delete, activate, deactivate, or purge anything. Give the API client
+> read-only access as a second line of defense: see [Credentials](#credentials).
+> Read [why I build read-only MCP servers](https://blog.wentland.io/blog/why-read-only-mcp/).
+
+## Credentials
+
+Create an API client in Akamai Control Center under **Identity & Access
+Management → API clients**. Grant read-only access, where the API offers it, to
+the APIs the tools use:
+
+| API | Used by |
+|---|---|
+| Property Manager (PAPI) | properties, groups, CP codes |
+| Edge DNS | DNS tools |
+| EdgeWorkers | EdgeWorker tools |
+| Network Lists | network list tools |
+| Edge Diagnostics | `translate_error_code` |
+
+The client's `host`, `client_token`, `client_secret` and `access_token` map to
+the four `AKAMAI_*` variables below.
 
 ## Tools
 
@@ -57,24 +99,27 @@ Read-only MCP server for Akamai CDN. Search properties, browse EdgeWorker code, 
 ## Install
 
 ```bash
-# With uv (recommended)
-uv pip install readonly-mcp-akamai
-
-# With pip
-pip install readonly-mcp-akamai
+uv tool install readonly-mcp-akamai   # or: pip install readonly-mcp-akamai
 ```
+
+Not needed for the Quick start, which runs it with `uvx`.
 
 ## Docker
 
 ```bash
-docker run -e AKAMAI_HOST=... -e AKAMAI_CLIENT_TOKEN=... \
-  -e AKAMAI_CLIENT_SECRET=... -e AKAMAI_ACCESS_TOKEN=... \
-  ghcr.io/desty2k/readonly-mcp-akamai
+docker run -i --rm \
+  -e AKAMAI_HOST=akab-xxxx.luna.akamaiapis.net \
+  -e AKAMAI_CLIENT_TOKEN=akab-xxxx \
+  -e AKAMAI_CLIENT_SECRET=xxxx \
+  -e AKAMAI_ACCESS_TOKEN=akab-xxxx \
+  ghcr.io/desty2k/readonly-mcp-akamai:latest
 ```
+
+`-i` keeps stdin open for the default stdio transport.
 
 ## Configuration
 
-All settings are via environment variables with the `AKAMAI_` prefix.
+All settings are environment variables with the `AKAMAI_` prefix.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -88,19 +133,23 @@ All settings are via environment variables with the `AKAMAI_` prefix.
 | `AKAMAI_LOG_LEVEL` | No | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `AKAMAI_INDEX_REFRESH_INTERVAL` | No | `300` | Property index refresh interval in seconds |
 
-Get credentials from Akamai Control Center > Identity & Access Management > API Clients.
+The `http` and `sse` transports listen on all interfaces and have no
+authentication. Run them only where the port is not reachable from outside,
+for example published on loopback: `docker run -p 127.0.0.1:8080:8080 ...`.
 
 ## MCP client configuration
 
 ### Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Add to `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on
+macOS, `%APPDATA%\Claude\` on Windows):
 
 ```json
 {
   "mcpServers": {
     "akamai": {
-      "command": "readonly-mcp-akamai",
+      "command": "uvx",
+      "args": ["readonly-mcp-akamai"],
       "env": {
         "AKAMAI_HOST": "akab-xxxx.luna.akamaiapis.net",
         "AKAMAI_CLIENT_TOKEN": "akab-xxxx",
@@ -114,11 +163,16 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ### Claude Code
 
-```bash
-claude mcp add akamai -- readonly-mcp-akamai
-```
+See [Quick start](#quick-start).
 
-Set the `AKAMAI_*` environment variables before starting Claude Code.
+## How it compares
+
+As of November 2026. Akamai's own MCP servers under
+[akamai-developers](https://github.com/orgs/akamai-developers/repositories)
+cover other products: [Akamai Cloud](https://github.com/akamai-developers/akamai-cloud-mcp)
+(Linode, also read-only), Akamai Functions, and the documentation. None of them
+reads Property Manager, EdgeWorkers, Edge DNS, or Network Lists. Check the
+projects themselves before relying on this.
 
 ## Example questions
 
@@ -136,21 +190,14 @@ An agent with this server can answer:
 ## Development
 
 ```bash
-# Clone
-git clone https://github.com/desty2k/readonly-mcp-akamai.git
+git clone https://github.com/desty2k/readonly-mcp-akamai
 cd readonly-mcp-akamai
-
-# Install with dev dependencies
-uv pip install -e ".[dev]"
-
-# Run tests
-pytest --cov
-
-# Lint
-ruff check .
-ruff format --check .
+uv sync --extra dev
+uv run pytest --cov
+uv run ruff check .
+uv run ruff format --check .
 ```
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

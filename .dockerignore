@@ -17,6 +17,5 @@ htmlcov
 .ruff_cache
 .mypy_cache
 .DS_Store
-README.md
 CHANGELOG.md
 LICENSE
